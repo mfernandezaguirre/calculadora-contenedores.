@@ -1,0 +1,452 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Calculadora de carga por contenedor</title>
+<style>
+:root{
+  --bg:#f4f6f9; --card:#ffffff; --ink:#1b2430; --muted:#5d6b7c; --line:#dde3ea;
+  --brand:#0b5cab; --brand-ink:#ffffff; --ok:#1c7c43; --okbg:#e6f4ec;
+  --warn:#9a5b00; --warnbg:#fff3dc; --bad:#b3261e; --badbg:#fdeceb; --rec:#e8f1fb;
+}
+@media (prefers-color-scheme:dark){
+  :root{--bg:#10151c;--card:#18202a;--ink:#e8edf3;--muted:#98a6b6;--line:#2a3542;
+  --brand:#4a9bf0;--brand-ink:#08111c;--ok:#5fd18a;--okbg:#14301f;--warn:#f0b24d;--warnbg:#33260c;
+  --bad:#ff8a80;--badbg:#3a1714;--rec:#16293f;}
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+header{background:var(--brand);color:var(--brand-ink);padding:20px 16px}
+header h1{margin:0;font-size:22px}
+header p{margin:4px 0 0;opacity:.9}
+main{max-width:1080px;margin:0 auto;padding:16px}
+section{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:16px}
+h2{margin:0 0 4px;font-size:17px}
+.hint{color:var(--muted);font-size:13px;margin:0 0 12px}
+.scroll{overflow-x:auto}
+table{border-collapse:collapse;width:100%}
+th,td{padding:6px;text-align:left;border-bottom:1px solid var(--line);white-space:nowrap}
+th{font-size:12px;color:var(--muted);font-weight:600}
+input[type=text],input[type=number]{width:100%;min-width:64px;padding:7px 8px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:inherit}
+input[type=checkbox]{width:18px;height:18px}
+button{font:inherit;border:1px solid var(--line);background:var(--card);color:var(--ink);padding:8px 12px;border-radius:8px;cursor:pointer}
+button.primary{background:var(--brand);color:var(--brand-ink);border-color:var(--brand)}
+button:hover{filter:brightness(.96)}
+button:disabled{opacity:.5;cursor:not-allowed}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+label.f{display:block;font-size:13px;color:var(--muted)}
+label.f input{margin-top:4px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:12px}
+.kpi{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px}
+.kpi b{display:block;font-size:20px}
+.kpi span{font-size:12px;color:var(--muted)}
+.rec{background:var(--rec);border:1px solid var(--brand);border-radius:10px;padding:12px;margin:12px 0}
+.rec h3{margin:0 0 4px;font-size:16px}
+tr.best td{background:var(--rec);font-weight:600}
+.tag{display:inline-block;padding:2px 8px;border-radius:999px;font-size:12px}
+.tag.ok{background:var(--okbg);color:var(--ok)}
+.tag.bad{background:var(--badbg);color:var(--bad)}
+.bar{height:8px;background:var(--line);border-radius:6px;overflow:hidden;min-width:80px}
+.bar i{display:block;height:100%;background:var(--brand)}
+.bar i.hi{background:var(--warn)}
+.alert{padding:9px 12px;border-radius:8px;margin:6px 0;font-size:14px}
+.alert.warn{background:var(--warnbg);color:var(--warn)}
+.alert.bad{background:var(--badbg);color:var(--bad)}
+.alert.info{background:var(--bg);color:var(--muted);border:1px solid var(--line)}
+.explain{white-space:pre-wrap;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:12px;margin-top:10px}
+.small{font-size:12px;color:var(--muted)}
+details summary{cursor:pointer;font-weight:600}
+@media print{header,button,.noprint{display:none!important}section{border:none}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Calculadora de carga por contenedor</h1>
+  <p>¿Cuánta carga entra en un 20', 40' o 40' HC? Cargá los bultos y la herramienta recomienda la opción más conveniente.</p>
+</header>
+<main>
+
+<section>
+  <h2>1 · Carga a embarcar</h2>
+  <p class="hint">Medidas en centímetros, peso en kilos. Usá solo datos ficticios.</p>
+  <div class="scroll">
+    <table id="tbl-items">
+      <thead><tr>
+        <th>Bulto</th><th>Largo (cm)</th><th>Ancho (cm)</th><th>Alto (cm)</th>
+        <th>Peso unit. (kg)</th><th>Cantidad</th><th title="Se puede poner un bulto encima de otro">Apilable</th>
+        <th title="Debe viajar con su altura vertical (no se puede acostar)">Va parado</th><th></th>
+      </tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+  <div class="row" style="margin-top:10px">
+    <button id="btn-add">+ Agregar bulto</button>
+    <span class="small">Ejemplos para probar:</span>
+    <button class="ej" data-ej="justo">Entra justo en un 20'</button>
+    <button class="ej" data-ej="peso">Limita el peso</button>
+    <button class="ej" data-ej="alto">Solo entra en 40' HC</button>
+    <button id="btn-clear">Limpiar</button>
+  </div>
+</section>
+
+<section>
+  <h2>2 · Parámetros</h2>
+  <div class="grid">
+    <label class="f">Aprovechamiento del espacio (%)
+      <input type="number" id="aprov" value="85" min="50" max="100" step="1"></label>
+  </div>
+  <p class="hint" style="margin-top:8px">El aprovechamiento descuenta huecos, estiba y calces. 85 % es un valor típico de referencia.</p>
+  <details>
+    <summary>Capacidades de los contenedores (aproximadas, confirmar con la naviera)</summary>
+    <div class="scroll"><table id="tbl-conts">
+      <thead><tr><th>Tipo</th><th>Volumen útil (m³)</th><th>Carga máx. (kg)</th><th>Largo int. (m)</th><th>Ancho int. (m)</th><th>Alto int. (m)</th><th>Flete por contenedor (USD, opcional)</th></tr></thead>
+      <tbody></tbody></table></div>
+    <p class="small">Si cargás el flete de cada tipo, la recomendación prioriza el menor costo total. Si lo dejás vacío, prioriza menos contenedores y mayor ocupación.</p>
+  </details>
+</section>
+
+<section id="resultado">
+  <h2>3 · Resultado</h2>
+  <div id="res-body"><p class="hint">Cargá al menos un bulto con medidas y peso.</p></div>
+</section>
+
+<section id="control" class="noprint">
+  <h2>4 · Control humano</h2>
+  <p class="hint">La herramienta sugiere; una persona revisa y aprueba antes de que la recomendación tenga efecto.</p>
+  <div class="grid">
+    <label class="f">Nombre de quien revisa <input type="text" id="revisor" placeholder="Nombre y apellido"></label>
+    <label class="f">Comentario <input type="text" id="coment" placeholder="Opcional"></label>
+  </div>
+  <div class="row" style="margin-top:10px">
+    <label><input type="checkbox" id="aprobado"> Revisé el cálculo y lo apruebo</label>
+  </div>
+  <div class="row" style="margin-top:10px">
+    <button class="primary" id="btn-explicar">Explicar la recomendación</button>
+    <button id="btn-csv">Descargar CSV</button>
+    <button id="btn-print">Imprimir / PDF</button>
+  </div>
+  <div id="explain" class="explain" hidden></div>
+  <p class="small" id="log-msg"></p>
+</section>
+
+</main>
+
+<script>
+/* ===== Configuración opcional (escalones 2 y 3) ===== */
+// URL de tu función serverless que llama a Gemini (ver worker.js). Vacío = explicación local.
+const AI_ENDPOINT = "";
+// URL de tu Google Apps Script que guarda el registro en Google Sheets. Vacío = no registra.
+const SHEETS_URL = "";
+
+/* ===== Lógica de cálculo ===== */
+// <CALC>
+const DEFAULT_CONT = [
+  { id: "20",   nombre: "20'",   vol: 33, payload: 28000, L: 5.90,  W: 2.35, H: 2.39, costo: "" },
+  { id: "40",   nombre: "40'",   vol: 67, payload: 26500, L: 12.03, W: 2.35, H: 2.39, costo: "" },
+  { id: "40HC", nombre: "40' HC", vol: 76, payload: 26500, L: 12.03, W: 2.35, H: 2.69, costo: "" }
+];
+const LIMIT_NAMES = { vol: "volumen", peso: "peso", piso: "superficie de piso (carga no apilable)" };
+
+function bultoEntra(b, c) {
+  const l = b.l / 100, a = b.a / 100, h = b.h / 100;
+  if (b.parado) {
+    return h <= c.H && Math.min(l, a) <= c.W && Math.max(l, a) <= c.L;
+  }
+  const d = [l, a, h].sort((x, y) => x - y);
+  const k = [c.L, c.W, c.H].sort((x, y) => x - y);
+  return d[0] <= k[0] && d[1] <= k[1] && d[2] <= k[2];
+}
+
+function calcular(items, conts, aprovPct) {
+  const aprov = Math.min(Math.max(aprovPct, 1), 100) / 100;
+  const validos = items.filter(b => b.l > 0 && b.a > 0 && b.h > 0 && b.cant > 0 && b.peso >= 0);
+  const vol = validos.reduce((s, b) => s + b.l * b.a * b.h / 1e6 * b.cant, 0);
+  const peso = validos.reduce((s, b) => s + b.peso * b.cant, 0);
+  const piso = validos.filter(b => !b.apilable).reduce((s, b) => s + b.l * b.a / 1e4 * b.cant, 0);
+  const bultos = validos.reduce((s, b) => s + b.cant, 0);
+
+  const opciones = conts.map(c => {
+    const nVol = Math.ceil(vol / (c.vol * aprov) - 1e-9);
+    const nPeso = Math.ceil(peso / c.payload - 1e-9);
+    const nPiso = Math.ceil(piso / (c.L * c.W * aprov) - 1e-9);
+    const n = Math.max(nVol, nPeso, nPiso, 1);
+    // Factor limitante: el que está más cerca de su tope (mayor proporción de uso)
+    const ratios = {
+      vol: vol / (c.vol * aprov),
+      peso: peso / c.payload,
+      piso: piso > 0 ? piso / (c.L * c.W * aprov) : 0
+    };
+    const rMax = Math.max(ratios.vol, ratios.peso, ratios.piso);
+    const limites = Object.keys(ratios).filter(k => ratios[k] > 0 && Math.abs(ratios[k] - rMax) < 1e-9);
+    const noEntran = validos.filter(b => !bultoEntra(b, c)).map(b => b.nombre || "(sin nombre)");
+    const costoUnit = parseFloat(c.costo);
+    return {
+      id: c.id, nombre: c.nombre, n, nVol, nPeso, nPiso, limites,
+      ocupVol: vol / (n * c.vol) * 100,
+      ocupPeso: peso / (n * c.payload) * 100,
+      entra: noEntran.length === 0, noEntran,
+      capacidadTotal: n * c.vol,
+      costoTotal: isFinite(costoUnit) && costoUnit > 0 ? costoUnit * n : null
+    };
+  });
+
+  const factibles = opciones.filter(o => o.entra);
+  let mejor = null;
+  if (factibles.length) {
+    const conCosto = factibles.every(o => o.costoTotal !== null);
+    factibles.sort((x, y) => conCosto
+      ? (x.costoTotal - y.costoTotal) || (x.n - y.n) || (x.capacidadTotal - y.capacidadTotal)
+      : (x.n - y.n) || (x.capacidadTotal - y.capacidadTotal));
+    mejor = factibles[0];
+    mejor.porCosto = conCosto;
+  }
+
+  const alertas = [];
+  opciones.filter(o => !o.entra).forEach(o =>
+    alertas.push({ t: "bad", m: `En ${o.nombre} no entra por medidas: ${o.noEntran.join(", ")}.` }));
+  if (mejor) {
+    if (mejor.limites.includes("peso"))
+      alertas.push({ t: "warn", m: `El peso es el factor limitante: se llega al máximo de carga antes de llenar el volumen. Hay espacio sin usar.` });
+    if (mejor.limites.includes("piso") && mejor.n > 1)
+      alertas.push({ t: "warn", m: `La carga no apilable ocupa todo el piso antes de llenar el volumen.` });
+    if (mejor.n === 1 && mejor.ocupVol < 40 && mejor.ocupPeso < 40)
+      alertas.push({ t: "warn", m: `El contenedor va casi vacío (${mejor.ocupVol.toFixed(0)} % del volumen). Evaluá carga consolidada (LCL).` });
+    if (Math.max(mejor.ocupVol, mejor.ocupPeso) > 95)
+      alertas.push({ t: "warn", m: `Ocupación muy alta (más de 95 %). Verificá la estiba real: un pequeño error en las medidas puede dejar carga afuera.` });
+    if (mejor.n > 1)
+      alertas.push({ t: "info", m: `La carga necesita ${mejor.n} contenedores. Revisá si conviene repartirla o combinar tipos distintos.` });
+  } else if (validos.length) {
+    alertas.push({ t: "bad", m: "Ningún contenedor estándar admite esta carga por medidas. Consultá carga especial (flat rack, open top) con el forwarder." });
+  }
+  alertas.push({ t: "info", m: "Las capacidades de los contenedores son aproximadas y varían según la naviera. Confirmalas antes de reservar." });
+
+  return { vol, peso, piso, bultos, opciones, mejor, alertas, validos: validos.length };
+}
+
+function textoRecomendacion(r) {
+  if (!r.mejor) return "No hay una opción que admita la carga por medidas.";
+  const m = r.mejor;
+  const lim = m.limites.map(k => LIMIT_NAMES[k]).join(" y ");
+  return `Conviene ${m.n} × ${m.nombre}. Ocupa ${m.ocupVol.toFixed(1)} % del volumen y ${m.ocupPeso.toFixed(1)} % del peso máximo. ` +
+    `El factor que más pesa es: ${lim}. ` +
+    (m.porCosto ? "Se eligió por menor costo total de flete." : "Se eligió por usar menos contenedores y tener mayor ocupación.");
+}
+// </CALC>
+
+/* ===== Interfaz ===== */
+const EJEMPLOS = {
+  justo: [{ nombre: "Cajas de cartón", l: 60, a: 40, h: 40, peso: 40, cant: 290, apilable: true, parado: false }],
+  peso:  [{ nombre: "Pallet de bobinas", l: 120, a: 100, h: 80, peso: 1300, cant: 22, apilable: true, parado: false }],
+  alto:  [{ nombre: "Máquina envasadora", l: 120, a: 110, h: 255, peso: 900, cant: 6, apilable: false, parado: true }]
+};
+let items = [];
+let conts = JSON.parse(JSON.stringify(DEFAULT_CONT));
+let ultimo = null;
+
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const fmt = (n, d = 1) => n.toLocaleString("es-AR", { minimumFractionDigits: d, maximumFractionDigits: d });
+
+function nuevoBulto(v) {
+  return Object.assign({ nombre: "", l: "", a: "", h: "", peso: "", cant: 1, apilable: true, parado: false }, v || {});
+}
+
+function renderItems() {
+  const tb = $("#tbl-items tbody");
+  tb.innerHTML = items.map((b, i) => `<tr>
+    <td><input type="text" data-i="${i}" data-k="nombre" value="${esc(b.nombre)}" placeholder="Ej: Cajas"></td>
+    <td><input type="number" min="0" data-i="${i}" data-k="l" value="${esc(b.l)}"></td>
+    <td><input type="number" min="0" data-i="${i}" data-k="a" value="${esc(b.a)}"></td>
+    <td><input type="number" min="0" data-i="${i}" data-k="h" value="${esc(b.h)}"></td>
+    <td><input type="number" min="0" data-i="${i}" data-k="peso" value="${esc(b.peso)}"></td>
+    <td><input type="number" min="1" data-i="${i}" data-k="cant" value="${esc(b.cant)}"></td>
+    <td><input type="checkbox" data-i="${i}" data-k="apilable" ${b.apilable ? "checked" : ""}></td>
+    <td><input type="checkbox" data-i="${i}" data-k="parado" ${b.parado ? "checked" : ""}></td>
+    <td><button data-del="${i}" title="Quitar">✕</button></td>
+  </tr>`).join("");
+}
+
+function renderConts() {
+  $("#tbl-conts tbody").innerHTML = conts.map((c, i) => `<tr>
+    <td><b>${esc(c.nombre)}</b></td>
+    <td><input type="number" step="0.1" data-c="${i}" data-k="vol" value="${c.vol}"></td>
+    <td><input type="number" step="100" data-c="${i}" data-k="payload" value="${c.payload}"></td>
+    <td><input type="number" step="0.01" data-c="${i}" data-k="L" value="${c.L}"></td>
+    <td><input type="number" step="0.01" data-c="${i}" data-k="W" value="${c.W}"></td>
+    <td><input type="number" step="0.01" data-c="${i}" data-k="H" value="${c.H}"></td>
+    <td><input type="number" min="0" data-c="${i}" data-k="costo" value="${esc(c.costo)}" placeholder="Opcional"></td>
+  </tr>`).join("");
+}
+
+function numItems() {
+  return items.map(b => ({
+    nombre: b.nombre, l: parseFloat(b.l), a: parseFloat(b.a), h: parseFloat(b.h),
+    peso: parseFloat(b.peso), cant: parseInt(b.cant, 10), apilable: b.apilable, parado: b.parado
+  }));
+}
+function numConts() {
+  return conts.map(c => ({
+    id: c.id, nombre: c.nombre, vol: parseFloat(c.vol), payload: parseFloat(c.payload),
+    L: parseFloat(c.L), W: parseFloat(c.W), H: parseFloat(c.H), costo: c.costo
+  }));
+}
+
+function recalc() {
+  const aprov = parseFloat($("#aprov").value) || 85;
+  const r = calcular(numItems(), numConts(), aprov);
+  ultimo = r;
+  $("#explain").hidden = true;
+  const body = $("#res-body");
+  if (!r.validos) {
+    body.innerHTML = '<p class="hint">Cargá al menos un bulto con medidas, peso y cantidad.</p>';
+    return;
+  }
+  const filas = r.opciones.map(o => {
+    const best = r.mejor && o.id === r.mejor.id;
+    const hi = Math.max(o.ocupVol, o.ocupPeso);
+    return `<tr class="${best ? "best" : ""}">
+      <td>${esc(o.nombre)} ${best ? "★" : ""}</td>
+      <td>${o.entra ? '<span class="tag ok">Entra</span>' : '<span class="tag bad">No entra por medidas</span>'}</td>
+      <td>${o.n}</td>
+      <td>${fmt(o.ocupVol)} %<div class="bar"><i class="${o.ocupVol > 95 ? "hi" : ""}" style="width:${Math.min(o.ocupVol, 100)}%"></i></div></td>
+      <td>${fmt(o.ocupPeso)} %<div class="bar"><i class="${o.ocupPeso > 95 ? "hi" : ""}" style="width:${Math.min(o.ocupPeso, 100)}%"></i></div></td>
+      <td>${o.limites.map(k => LIMIT_NAMES[k].split(" (")[0]).join(" + ")}</td>
+      <td>${o.costoTotal !== null ? "USD " + fmt(o.costoTotal, 0) : "—"}</td>
+    </tr>`;
+  }).join("");
+  body.innerHTML = `
+    <div class="kpis">
+      <div class="kpi"><b>${r.bultos}</b><span>bultos</span></div>
+      <div class="kpi"><b>${fmt(r.vol, 2)} m³</b><span>volumen total</span></div>
+      <div class="kpi"><b>${fmt(r.peso, 0)} kg</b><span>peso total</span></div>
+    </div>
+    <div class="scroll"><table>
+      <thead><tr><th>Contenedor</th><th>¿Entra?</th><th>Cantidad</th><th>Ocupación de volumen</th><th>Ocupación de peso</th><th>Factor limitante</th><th>Flete total</th></tr></thead>
+      <tbody>${filas}</tbody></table></div>
+    <div class="rec"><h3>Recomendación</h3><div>${esc(textoRecomendacion(r))}</div></div>
+    ${r.alertas.map(a => `<div class="alert ${a.t}">${esc(a.m)}</div>`).join("")}`;
+}
+
+/* Eventos */
+$("#tbl-items").addEventListener("input", e => {
+  const t = e.target, i = t.dataset.i, k = t.dataset.k;
+  if (i === undefined) return;
+  items[i][k] = t.type === "checkbox" ? t.checked : t.value;
+  recalc();
+});
+$("#tbl-items").addEventListener("click", e => {
+  const d = e.target.dataset.del;
+  if (d === undefined) return;
+  items.splice(+d, 1);
+  if (!items.length) items.push(nuevoBulto());
+  renderItems(); recalc();
+});
+$("#tbl-conts").addEventListener("input", e => {
+  const t = e.target, i = t.dataset.c, k = t.dataset.k;
+  if (i === undefined) return;
+  conts[i][k] = t.value;
+  recalc();
+});
+$("#aprov").addEventListener("input", recalc);
+$("#btn-add").addEventListener("click", () => { items.push(nuevoBulto()); renderItems(); });
+$("#btn-clear").addEventListener("click", () => { items = [nuevoBulto()]; renderItems(); recalc(); });
+document.querySelectorAll(".ej").forEach(b => b.addEventListener("click", () => {
+  items = EJEMPLOS[b.dataset.ej].map(nuevoBulto);
+  renderItems(); recalc();
+}));
+$("#btn-print").addEventListener("click", () => window.print());
+
+/* Explicación: IA por serverless si hay endpoint, si no texto local */
+function resumenParaIA() {
+  const r = ultimo;
+  return {
+    carga: { bultos: r.bultos, volumen_m3: +r.vol.toFixed(2), peso_kg: Math.round(r.peso) },
+    aprovechamiento_pct: parseFloat($("#aprov").value) || 85,
+    opciones: r.opciones.map(o => ({
+      contenedor: o.nombre, entra_por_medidas: o.entra, cantidad: o.n,
+      ocupacion_volumen_pct: +o.ocupVol.toFixed(1), ocupacion_peso_pct: +o.ocupPeso.toFixed(1),
+      factor_limitante: o.limites.map(k => LIMIT_NAMES[k])
+    })),
+    recomendacion_calculada: r.mejor ? { contenedor: r.mejor.nombre, cantidad: r.mejor.n } : null,
+    alertas: r.alertas.filter(a => a.t !== "info").map(a => a.m)
+  };
+}
+$("#btn-explicar").addEventListener("click", async () => {
+  if (!ultimo || !ultimo.validos) return;
+  const box = $("#explain");
+  box.hidden = false;
+  if (!AI_ENDPOINT) {
+    box.textContent = textoRecomendacion(ultimo) +
+      "\n\n(Explicación generada por reglas locales. Para activar el asistente de IA, configurá AI_ENDPOINT con tu función serverless.)";
+    return;
+  }
+  box.textContent = "Consultando al asistente…";
+  try {
+    const resp = await fetch(AI_ENDPOINT, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ resumen: resumenParaIA() })
+    });
+    const data = await resp.json();
+    box.textContent = (data.texto || "El asistente no devolvió respuesta.") +
+      "\n\n(Sugerencia generada por IA. Debe ser revisada por una persona.)";
+  } catch (err) {
+    box.textContent = textoRecomendacion(ultimo) + "\n\n(No se pudo consultar a la IA; se muestra la explicación local.)";
+  }
+});
+
+/* Aprobación humana + registro opcional */
+$("#aprobado").addEventListener("change", async e => {
+  const msg = $("#log-msg");
+  if (!e.target.checked) { msg.textContent = ""; return; }
+  if (!$("#revisor").value.trim()) {
+    e.target.checked = false;
+    msg.textContent = "Escribí el nombre de quien revisa antes de aprobar.";
+    return;
+  }
+  if (!ultimo || !ultimo.mejor) {
+    e.target.checked = false;
+    msg.textContent = "No hay una recomendación para aprobar.";
+    return;
+  }
+  const registro = {
+    fecha: new Date().toISOString(), revisor: $("#revisor").value.trim(), comentario: $("#coment").value.trim(),
+    bultos: ultimo.bultos, volumen_m3: +ultimo.vol.toFixed(2), peso_kg: Math.round(ultimo.peso),
+    recomendacion: `${ultimo.mejor.n} x ${ultimo.mejor.nombre}`, estado: "APROBADO"
+  };
+  if (!SHEETS_URL) { msg.textContent = "Aprobado. (Registro en Google Sheets desactivado: configurá SHEETS_URL.)"; return; }
+  try {
+    await fetch(SHEETS_URL, { method: "POST", mode: "no-cors", body: JSON.stringify(registro) });
+    msg.textContent = "Aprobado y registrado en la planilla.";
+  } catch (err) { msg.textContent = "Aprobado, pero no se pudo registrar en la planilla."; }
+});
+
+/* CSV */
+$("#btn-csv").addEventListener("click", () => {
+  if (!ultimo || !ultimo.validos) return;
+  const q = v => `"${String(v).replace(/"/g, '""')}"`;
+  const estado = $("#aprobado").checked ? `APROBADO por ${$("#revisor").value.trim()}` : "PENDIENTE DE REVISIÓN";
+  const l = [];
+  l.push(["Bulto", "Largo cm", "Ancho cm", "Alto cm", "Peso unit. kg", "Cantidad", "Apilable", "Va parado"].map(q).join(","));
+  numItems().filter(b => b.l > 0).forEach(b => l.push([b.nombre, b.l, b.a, b.h, b.peso, b.cant, b.apilable ? "Sí" : "No", b.parado ? "Sí" : "No"].map(q).join(",")));
+  l.push("");
+  l.push(["Contenedor", "Entra", "Cantidad", "Ocup. volumen %", "Ocup. peso %", "Factor limitante"].map(q).join(","));
+  ultimo.opciones.forEach(o => l.push([o.nombre, o.entra ? "Sí" : "No", o.n, o.ocupVol.toFixed(1), o.ocupPeso.toFixed(1), o.limites.map(k => LIMIT_NAMES[k]).join(" + ")].map(q).join(",")));
+  l.push("");
+  l.push([q("Recomendación"), q(textoRecomendacion(ultimo))].join(","));
+  l.push([q("Estado"), q(estado)].join(","));
+  const blob = new Blob(["\ufeff" + l.join("\n")], { type: "text/csv;charset=utf-8" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "calculo-contenedor.csv";
+  a.click();
+  URL.revokeObjectURL(a.href);
+});
+
+/* Inicio */
+items = EJEMPLOS.justo.map(nuevoBulto);
+renderItems(); renderConts(); recalc();
+</script>
+</body>
+</html>
